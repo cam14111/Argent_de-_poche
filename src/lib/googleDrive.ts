@@ -124,28 +124,53 @@ export class GoogleDriveService {
     const cached = await settingsRepository.get(GOOGLE_DRIVE_FOLDER_KEY)
     if (cached) return cached
 
-    const query = [
+    const baseQuery = [
       "mimeType='application/vnd.google-apps.folder'",
       "trashed=false",
       `name='${DRIVE_FOLDER_NAME}'`,
       `appProperties has { key='${APP_PROPERTY_KEY}' and value='${APP_PROPERTY_VALUE}' }`,
       `appProperties has { key='${TYPE_PROPERTY_KEY}' and value='${TYPE_PROPERTY_FOLDER}' }`,
-    ].join(' and ')
+    ]
 
-    const listUrl = `${DRIVE_BASE_URL}/files?q=${encodeURIComponent(
-      query
-    )}&fields=files(id,name)`
-    const listResponse = await this.requestJson<{ files?: Array<{ id?: string }> }>(
-      listUrl,
+    // 1. Chercher d'abord les dossiers partagés (mode member/enfant)
+    const sharedQuery = [...baseQuery, "sharedWithMe=true"].join(' and ')
+    const sharedUrl = `${DRIVE_BASE_URL}/files?q=${encodeURIComponent(
+      sharedQuery
+    )}&fields=files(id,name,ownedByMe)&orderBy=modifiedTime desc`
+
+    const sharedResponse = await this.requestJson<{ files?: Array<{ id?: string; ownedByMe?: boolean }> }>(
+      sharedUrl,
       { method: 'GET' }
     )
 
-    const existingId = listResponse.files?.[0]?.id
-    if (existingId) {
-      await settingsRepository.set(GOOGLE_DRIVE_FOLDER_KEY, existingId)
-      return existingId
+    // Si un dossier partagé existe et n'est pas possédé par l'utilisateur, l'utiliser
+    const sharedFolder = sharedResponse.files?.find(f => f.ownedByMe === false)
+    if (sharedFolder?.id) {
+      console.log('[GoogleDrive] Using shared folder:', sharedFolder.id)
+      await settingsRepository.set(GOOGLE_DRIVE_FOLDER_KEY, sharedFolder.id)
+      return sharedFolder.id
     }
 
+    // 2. Sinon, chercher dans "My Drive" (mode owner/parent)
+    const ownedQuery = baseQuery.join(' and ')
+    const ownedUrl = `${DRIVE_BASE_URL}/files?q=${encodeURIComponent(
+      ownedQuery
+    )}&fields=files(id,name)`
+
+    const ownedResponse = await this.requestJson<{ files?: Array<{ id?: string }> }>(
+      ownedUrl,
+      { method: 'GET' }
+    )
+
+    const ownedId = ownedResponse.files?.[0]?.id
+    if (ownedId) {
+      console.log('[GoogleDrive] Using owned folder:', ownedId)
+      await settingsRepository.set(GOOGLE_DRIVE_FOLDER_KEY, ownedId)
+      return ownedId
+    }
+
+    // 3. Créer un nouveau dossier (premier usage, mode owner)
+    console.log('[GoogleDrive] Creating new folder')
     const createUrl = `${DRIVE_BASE_URL}/files`
     const metadata = {
       name: DRIVE_FOLDER_NAME,
