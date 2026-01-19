@@ -213,6 +213,32 @@ export class GoogleDriveService {
     return (response.files ?? []).map(parseFileEntry)
   }
 
+  /**
+   * Liste tous les fichiers du dossier ArgentDePoche (sans filtrer par type)
+   * Utilisé pour trouver SHARED_FOLDER_INFO.json et autres fichiers non-backup
+   */
+  async listAllFiles(): Promise<DriveFileEntry[]> {
+    const folderId = await this.ensureFolderId()
+    const query = [
+      `'${folderId}' in parents`,
+      'trashed=false',
+      `appProperties has { key='${APP_PROPERTY_KEY}' and value='${APP_PROPERTY_VALUE}' }`,
+    ].join(' and ')
+
+    const fields =
+      'files(id,name,size,createdTime,modifiedTime,appProperties)'
+    const listUrl = `${DRIVE_BASE_URL}/files?q=${encodeURIComponent(
+      query
+    )}&fields=${encodeURIComponent(fields)}`
+
+    const response = await this.requestJson<{ files?: Array<Record<string, any>> }>(
+      listUrl,
+      { method: 'GET' }
+    )
+
+    return (response.files ?? []).map(parseFileEntry)
+  }
+
   async listFiles(): Promise<DriveFileEntry[]> {
     return await this.listBackupFiles()
   }

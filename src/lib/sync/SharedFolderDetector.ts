@@ -66,8 +66,8 @@ export class SharedFolderDetector {
    */
   async getSharedFolderInfo(): Promise<SharedFolderInfo | null> {
     try {
-      // Lister les fichiers dans le dossier ArgentDePoche
-      const files = await this.drive.listBackupFiles()
+      // Lister TOUS les fichiers dans le dossier ArgentDePoche (pas seulement les backups)
+      const files = await this.drive.listAllFiles()
 
       // Chercher SHARED_FOLDER_INFO.json
       const infoFile = files.find(
