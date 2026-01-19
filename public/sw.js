@@ -1,22 +1,26 @@
-const CACHE_NAME = 'argent-de-poche-v1'
+const CACHE_NAME = 'argent-de-poche-v2'
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/piggy-bank.svg',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/maskable-192.png',
-  '/icons/maskable-512.png',
-  '/icons/icon-180.png',
-  '/splash/splash-640x1136.png',
+  './',
+  './index.html',
+  './manifest.json',
+  './piggy-bank.svg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/maskable-192.png',
+  './icons/maskable-512.png',
+  './icons/icon-180.png',
+  './splash/splash-640x1136.png',
 ]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then((cache) => {
+        const base = self.registration.scope
+        const urls = STATIC_ASSETS.map((asset) => new URL(asset, base).href)
+        return cache.addAll(urls)
+      })
       .then(() => self.skipWaiting())
   )
 })
@@ -51,7 +55,8 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => {
           if (event.request.mode === 'navigate') {
-            return caches.match('/')
+            const indexUrl = new URL('./index.html', self.registration.scope).href
+            return caches.match(indexUrl)
           }
           return Promise.reject(new Error('Network error'))
         })
