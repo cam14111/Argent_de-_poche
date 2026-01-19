@@ -4,7 +4,7 @@ export type ResetSwResult = {
 }
 
 export async function resetServiceWorkerAndCaches(): Promise<ResetSwResult> {
-  let registrations: ServiceWorkerRegistration[] = []
+  let registrations: readonly ServiceWorkerRegistration[] = []
   if ('serviceWorker' in navigator) {
     try {
       registrations = await navigator.serviceWorker.getRegistrations()
