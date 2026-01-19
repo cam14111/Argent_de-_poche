@@ -1,6 +1,8 @@
 import { settingsRepository } from '@/db'
 
-export const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
+// drive.file ne permet pas de voir les fichiers partagés par d'autres utilisateurs
+// drive permet l'accès complet, nécessaire pour voir les dossiers partagés (mode enfant)
+export const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive'
 export const GOOGLE_AUTH_TOKEN_KEY = 'google_drive_token'
 export const GOOGLE_AUTH_PROFILE_KEY = 'google_profile'
 export const GOOGLE_USERINFO_ENDPOINT = 'https://openidconnect.googleapis.com/v1/userinfo'
