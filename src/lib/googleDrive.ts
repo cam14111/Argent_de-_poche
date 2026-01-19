@@ -124,16 +124,15 @@ export class GoogleDriveService {
     const cached = await settingsRepository.get(GOOGLE_DRIVE_FOLDER_KEY)
     if (cached) return cached
 
-    const baseQuery = [
+    // 1. Chercher d'abord les dossiers partagés (mode member/enfant)
+    // IMPORTANT: Ne pas filtrer par appProperties car elles sont privées au propriétaire
+    // et invisibles pour les utilisateurs avec qui le dossier est partagé
+    const sharedQuery = [
       "mimeType='application/vnd.google-apps.folder'",
       "trashed=false",
       `name='${DRIVE_FOLDER_NAME}'`,
-      `appProperties has { key='${APP_PROPERTY_KEY}' and value='${APP_PROPERTY_VALUE}' }`,
-      `appProperties has { key='${TYPE_PROPERTY_KEY}' and value='${TYPE_PROPERTY_FOLDER}' }`,
-    ]
-
-    // 1. Chercher d'abord les dossiers partagés (mode member/enfant)
-    const sharedQuery = [...baseQuery, "sharedWithMe=true"].join(' and ')
+      "sharedWithMe=true",
+    ].join(' and ')
     const sharedUrl = `${DRIVE_BASE_URL}/files?q=${encodeURIComponent(
       sharedQuery
     )}&fields=files(id,name,ownedByMe)&orderBy=modifiedTime desc`
@@ -152,7 +151,13 @@ export class GoogleDriveService {
     }
 
     // 2. Sinon, chercher dans "My Drive" (mode owner/parent)
-    const ownedQuery = baseQuery.join(' and ')
+    const ownedQuery = [
+      "mimeType='application/vnd.google-apps.folder'",
+      "trashed=false",
+      `name='${DRIVE_FOLDER_NAME}'`,
+      `appProperties has { key='${APP_PROPERTY_KEY}' and value='${APP_PROPERTY_VALUE}' }`,
+      `appProperties has { key='${TYPE_PROPERTY_KEY}' and value='${TYPE_PROPERTY_FOLDER}' }`,
+    ].join(' and ')
     const ownedUrl = `${DRIVE_BASE_URL}/files?q=${encodeURIComponent(
       ownedQuery
     )}&fields=files(id,name)`
@@ -192,11 +197,11 @@ export class GoogleDriveService {
 
   async listBackupFiles(): Promise<DriveFileEntry[]> {
     const folderId = await this.ensureFolderId()
+    // Ne pas filtrer par appProperties car elles sont invisibles pour les membres (enfants)
+    // Filtrer par nom de fichier à la place
     const query = [
       `'${folderId}' in parents`,
       'trashed=false',
-      `appProperties has { key='${APP_PROPERTY_KEY}' and value='${APP_PROPERTY_VALUE}' }`,
-      `appProperties has { key='${TYPE_PROPERTY_KEY}' and value='${TYPE_PROPERTY_BACKUP}' }`,
     ].join(' and ')
 
     const fields =
@@ -210,7 +215,9 @@ export class GoogleDriveService {
       { method: 'GET' }
     )
 
-    return (response.files ?? []).map(parseFileEntry)
+    // Filtrer côté client par nom de fichier (pattern backup)
+    const allFiles = (response.files ?? []).map(parseFileEntry)
+    return allFiles.filter(f => f.name.startsWith('argent-de-poche-backup'))
   }
 
   /**
@@ -219,10 +226,10 @@ export class GoogleDriveService {
    */
   async listAllFiles(): Promise<DriveFileEntry[]> {
     const folderId = await this.ensureFolderId()
+    // Ne pas filtrer par appProperties car elles sont invisibles pour les membres (enfants)
     const query = [
       `'${folderId}' in parents`,
       'trashed=false',
-      `appProperties has { key='${APP_PROPERTY_KEY}' and value='${APP_PROPERTY_VALUE}' }`,
     ].join(' and ')
 
     const fields =
