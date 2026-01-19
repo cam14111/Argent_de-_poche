@@ -10,7 +10,7 @@ import type { MergeResult, ConflictLog } from './types'
 /**
  * Clés de settings à exclure de la synchronisation (local à l'appareil)
  */
-const EXCLUDED_SETTINGS_KEYS = new Set([
+export const EXCLUDED_SETTINGS_KEYS = new Set([
   'pin_hash',
   'auth_mode',
   'google_drive_token',

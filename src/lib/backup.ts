@@ -5,6 +5,7 @@ import {
   isEncryptedBackup,
   type EncryptedBackup,
 } from './backupEncryption'
+import { EXCLUDED_SETTINGS_KEYS } from './sync/SyncMergeStrategy'
 
 export const BACKUP_SCHEMA_VERSION = 3 // Sprint 6: Ajout support archivedAt
 
@@ -361,13 +362,21 @@ export class JsonImporter {
     const normalized = normalizeBackupPayload(payload)
 
     if (mode !== 'replace' && mode !== 'merge') {
-      throw new BackupError('Mode d’import non supporte.')
+      throw new BackupError("Mode d'import non supporte.")
     }
 
     await db.transaction(
       'rw',
       [db.profiles, db.users, db.transactions, db.motifs, db.settings],
       async () => {
+        // Sauvegarder les settings locales à l'appareil AVANT le clear
+        // (auth_mode, pin_hash, tokens Google, etc.)
+        let localSettings: Settings[] = []
+        if (mode === 'replace') {
+          const allSettings = await db.settings.toArray()
+          localSettings = allSettings.filter((s) => EXCLUDED_SETTINGS_KEYS.has(s.key))
+        }
+
         if (mode === 'replace') {
           await Promise.all([
             db.profiles.clear(),
@@ -384,7 +393,15 @@ export class JsonImporter {
         await db.motifs.bulkPut(normalized.data.motifs)
 
         if (mode === 'replace') {
-          await db.settings.bulkPut(normalized.data.settings)
+          // Filtrer les settings locales du backup (on ne veut pas les écraser)
+          const filteredSettings = normalized.data.settings.filter(
+            (s) => !EXCLUDED_SETTINGS_KEYS.has(s.key)
+          )
+          await db.settings.bulkPut(filteredSettings)
+          // Restaurer les settings locales préservées
+          if (localSettings.length > 0) {
+            await db.settings.bulkPut(localSettings)
+          }
         } else {
           await mergeSettings(normalized.data.settings)
         }
