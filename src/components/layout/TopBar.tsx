@@ -58,22 +58,22 @@ export function TopBar({ title, showModeSwitch = true, onParentModeClick, backTo
               </svg>
             </Link>
           )}
-          <div className="flex flex-col">
+          <div className="flex items-baseline gap-2">
             {isHomePage ? (
-              <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
+              <h1 className="text-lg font-semibold text-gray-900 leading-none">{title}</h1>
             ) : (
               <Link to="/" className="hover:opacity-80 transition-opacity">
-                <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
+                <h1 className="text-lg font-semibold text-gray-900 leading-none">{title}</h1>
               </Link>
             )}
             {showVersion && (
-              <span className="text-xs text-gray-500">v{APP_VERSION}</span>
+              <span className="text-xs text-gray-400 leading-none">v{APP_VERSION}</span>
             )}
           </div>
         </div>
 
         {showModeSwitch && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {isParentMode && <SyncIndicator />}
             <Button
               variant="ghost"
@@ -84,7 +84,7 @@ export function TopBar({ title, showModeSwitch = true, onParentModeClick, backTo
             </Button>
             {isParentMode ? (
               <>
-                <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
+                <span className="inline-flex items-center text-xs font-medium text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full leading-none">
                   Mode Parent
                 </span>
                 <Button variant="ghost" size="sm" onClick={switchToChildMode}>
