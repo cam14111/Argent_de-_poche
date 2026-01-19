@@ -9,6 +9,7 @@ import {
   type ImportMode,
 } from './backup'
 import { GoogleDriveError, GoogleDriveService, type DriveFileEntry } from './googleDrive'
+import { syncService } from './sync/SyncService'
 
 export const GOOGLE_DRIVE_LAST_BACKUP_KEY = 'google_drive_last_backup'
 export const GOOGLE_DRIVE_RETENTION_KEY = 'google_drive_backup_retention'
@@ -150,6 +151,12 @@ export class BackupManager {
   async backup(): Promise<DriveBackupItem> {
     this.updateState({ status: 'in_progress', operation: 'backup' })
     try {
+      // Vérifier le mode de synchronisation - bloquer en mode member (enfant)
+      const mode = syncService.getMode()
+      if (mode === 'member') {
+        throw new Error('Les backups ne sont pas autorisés en mode membre (enfant)')
+      }
+
       const payload = await this.exporter.exportPayload()
       const json = JSON.stringify(payload, null, 2)
       const fileName = buildBackupFileName(new Date(payload.exportedAt))

@@ -68,10 +68,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       await autoSyncService.initialize()
       await syncStatusManager.initialize()
 
-      // Détecter le mode de synchronisation
+      // Détecter et initialiser le mode de synchronisation
       const detector = new SharedFolderDetector()
-      const detectedMode = await detector.detectMode()
+      const detectedMode = await detector.initializeIfNeeded()
       setMode(detectedMode)
+
+      // Définir le mode dans le SyncService
+      syncService.setMode(detectedMode)
 
       // Si mode member, charger les données depuis Drive
       if (detectedMode === 'member') {

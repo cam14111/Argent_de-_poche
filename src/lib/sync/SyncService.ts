@@ -13,7 +13,7 @@ import {
 import { settingsRepository } from '@/db'
 import { mergeBackups, getAndClearConflictLogs } from './SyncMergeStrategy'
 import { sha256Hash } from './utils'
-import type { SyncOptions, ConflictLog } from './types'
+import type { SyncOptions, ConflictLog, SyncMode } from './types'
 
 const LAST_SYNC_AT_KEY = 'sync_last_sync_at'
 const LAST_BACKUP_HASH_KEY = 'sync_last_backup_hash'
@@ -32,10 +32,27 @@ export class SyncError extends Error {
  * Service de synchronisation
  */
 export class SyncService {
+  private mode: SyncMode = 'none'
+
   constructor(
     private drive: GoogleDriveService = new GoogleDriveService(),
     private auth = GoogleAuthService
   ) {}
+
+  /**
+   * Définit le mode de synchronisation (owner/member/none)
+   */
+  setMode(mode: SyncMode): void {
+    this.mode = mode
+    console.log('[SyncService] Mode set to:', mode)
+  }
+
+  /**
+   * Récupère le mode de synchronisation actuel
+   */
+  getMode(): SyncMode {
+    return this.mode
+  }
 
   /**
    * Vérifie si la synchronisation est disponible
@@ -51,6 +68,7 @@ export class SyncService {
 
   /**
    * Synchronisation complète : télécharge, merge, et upload
+   * En mode member (enfant), ne télécharge que les données sans upload
    */
   async sync(options: SyncOptions = {}): Promise<ConflictLog[]> {
     const available = await this.isAvailable()
@@ -58,9 +76,33 @@ export class SyncService {
       throw new SyncError('Authentification Google requise pour synchroniser')
     }
 
-    console.log('[SyncService] Starting sync...')
+    console.log('[SyncService] Starting sync...', { mode: this.mode })
 
     try {
+      // En mode member (enfant), on ne fait que télécharger et importer
+      if (this.mode === 'member') {
+        console.log('[SyncService] Member mode - downloading data only...')
+        const remotePayload = await this.downloadLatestBackup()
+
+        if (!remotePayload) {
+          console.log('[SyncService] No backup found in shared folder')
+          return []
+        }
+
+        // Importer les données distantes en mode replace (lecture seule)
+        if (!options.skipDownload) {
+          await JsonImporter.importPayload(remotePayload, 'replace')
+        }
+
+        // Mettre à jour les métadonnées
+        const remoteHash = await sha256Hash(JSON.stringify(remotePayload))
+        await this.updateSyncMetadata(remoteHash)
+
+        console.log('[SyncService] Member sync completed - data imported')
+        return []
+      }
+
+      // Mode owner ou none : comportement standard avec upload
       // 1. Export des données locales
       const localPayload = await JsonExporter.exportPayload()
 
@@ -121,11 +163,18 @@ export class SyncService {
 
   /**
    * Upload des données locales vers Drive
+   * Bloqué en mode member (enfant)
    */
   async upload(payload?: BackupPayload): Promise<void> {
     const available = await this.isAvailable()
     if (!available) {
       throw new SyncError('Authentification Google requise pour uploader')
+    }
+
+    // En mode member (enfant), bloquer l'upload
+    if (this.mode === 'member') {
+      console.log('[SyncService] Upload blocked in member mode')
+      throw new SyncError('Upload non autorisé en mode membre (enfant)')
     }
 
     try {
