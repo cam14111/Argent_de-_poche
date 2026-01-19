@@ -10,11 +10,15 @@ import { TransactionListItem } from '@/components/TransactionListItem'
 import { Button, Card, CardContent } from '@/components/ui'
 import { profileRepository, transactionRepository, motifRepository } from '@/db'
 import { useAuth } from '@/contexts/AuthContext'
+import { useMemberDataLoader } from '@/hooks/useMemberDataLoader'
 
 export function TransactionList() {
   const { profileId } = useParams({ strict: false })
   const navigate = useNavigate()
   const { isChildMode, isParentMode } = useAuth()
+
+  // Charger les données depuis Drive pour les membres (enfants)
+  useMemberDataLoader()
 
   const [filters, setFilters] = useState<FilterState>({
     period: 'all',

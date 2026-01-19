@@ -5,6 +5,7 @@ import { BalanceCard, BalanceCardSkeleton } from '@/components/BalanceCard'
 import { Button } from '@/components/ui'
 import { profileRepository, type Profile } from '@/db'
 import { useAuth } from '@/contexts/AuthContext'
+import { useMemberDataLoader } from '@/hooks/useMemberDataLoader'
 
 interface ProfileWithBalance extends Profile {
   balance: number
@@ -15,6 +16,9 @@ export function Dashboard() {
   const { isParentMode } = useAuth()
   const [profiles, setProfiles] = useState<ProfileWithBalance[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Charger les données depuis Drive pour les membres (enfants)
+  useMemberDataLoader()
 
   useEffect(() => {
     const loadProfiles = async () => {

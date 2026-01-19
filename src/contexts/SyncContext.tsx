@@ -10,6 +10,7 @@ import {
   autoSyncService,
   syncQueueService,
   SharedFolderDetector,
+  memberDataLoader,
   type SyncStatus,
   type SyncMode,
   type ConflictLog,
@@ -71,6 +72,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       const detector = new SharedFolderDetector()
       const detectedMode = await detector.detectMode()
       setMode(detectedMode)
+
+      // Si mode member, charger les données depuis Drive
+      if (detectedMode === 'member') {
+        console.log('[SyncContext] Member mode detected, loading data from Drive...')
+        memberDataLoader.forceLoad().catch((err) => {
+          console.error('[SyncContext] Error loading member data:', err)
+        })
+      }
 
       // Récupérer la configuration
       const config = autoSyncService.getConfig()

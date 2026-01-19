@@ -20,6 +20,10 @@ export {
   SharedFolderDetector,
   SharedFolderError,
 } from './SharedFolderDetector'
+export {
+  memberDataLoader,
+  MemberDataLoader,
+} from './MemberDataLoader'
 
 // Merge strategies
 export {
