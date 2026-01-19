@@ -80,11 +80,11 @@ export function AppShell({ title, children, showModeSwitch = true, backTo, showV
         showVersion={showVersion}
       />
       {!isOnline && (
-        <div className="bg-amber-50 text-amber-900 border-b border-amber-100 px-4 py-2 text-sm">
+        <div className="bg-amber-50 text-amber-900 border-b border-amber-100 px-3 sm:px-4 py-2 text-sm">
           Hors ligne : vos actions restent disponibles et seront synchronisees des que possible.
         </div>
       )}
-      <main className="p-4">{children}</main>
+      <main className="p-3 sm:p-4">{children}</main>
 
       <Dialog
         open={showPinDialog}

@@ -21,10 +21,10 @@ export function TopBar({ title, showModeSwitch = true, onParentModeClick, backTo
 
   return (
     <header className="sticky top-0 z-10 bg-white border-b border-gray-100">
-      <div className="flex items-center justify-between px-4 h-14">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-3 sm:px-4 h-14">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-shrink">
           {backTo && (
-            <Link to={backTo} className="text-gray-500 hover:text-gray-700 p-1">
+            <Link to={backTo} className="text-gray-500 hover:text-gray-700 p-1 flex-shrink-0">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="20"
@@ -41,7 +41,7 @@ export function TopBar({ title, showModeSwitch = true, onParentModeClick, backTo
             </Link>
           )}
           {!backTo && !isHomePage && (
-            <Link to="/" className="text-gray-500 hover:text-gray-700 p-1" title="Retour à l'accueil">
+            <Link to="/" className="text-gray-500 hover:text-gray-700 p-1 flex-shrink-0" title="Retour à l'accueil">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="20"
@@ -58,41 +58,52 @@ export function TopBar({ title, showModeSwitch = true, onParentModeClick, backTo
               </svg>
             </Link>
           )}
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
             {isHomePage ? (
-              <h1 className="text-lg font-semibold text-gray-900 leading-none">{title}</h1>
+              <h1 className="text-base sm:text-lg font-semibold text-gray-900 leading-tight truncate">{title}</h1>
             ) : (
-              <Link to="/" className="hover:opacity-80 transition-opacity">
-                <h1 className="text-lg font-semibold text-gray-900 leading-none">{title}</h1>
+              <Link to="/" className="hover:opacity-80 transition-opacity min-w-0">
+                <h1 className="text-base sm:text-lg font-semibold text-gray-900 leading-tight truncate">{title}</h1>
               </Link>
             )}
             {showVersion && (
-              <span className="text-xs text-gray-400 leading-none">v{APP_VERSION}</span>
+              <span className="text-xs text-gray-400 leading-tight flex-shrink-0">v{APP_VERSION}</span>
             )}
           </div>
         </div>
 
         {showModeSwitch && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             {isParentMode && <SyncIndicator />}
             <Button
               variant="ghost"
               size="sm"
               onClick={() => navigate({ to: '/settings' })}
+              className="text-xs sm:text-sm px-2 sm:px-3"
             >
               {settingsLabel}
             </Button>
             {isParentMode ? (
               <>
-                <span className="inline-flex items-center text-xs font-medium text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full leading-none">
+                <span className="inline-flex items-center text-[10px] sm:text-xs font-medium text-indigo-600 bg-indigo-50 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full leading-tight whitespace-nowrap">
                   Mode Parent
                 </span>
-                <Button variant="ghost" size="sm" onClick={switchToChildMode}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={switchToChildMode}
+                  className="text-xs sm:text-sm px-2 sm:px-3"
+                >
                   Verrouiller
                 </Button>
               </>
             ) : (
-              <Button variant="ghost" size="sm" onClick={onParentModeClick}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onParentModeClick}
+                className="text-xs sm:text-sm px-2 sm:px-3"
+              >
                 Mode Parent
               </Button>
             )}

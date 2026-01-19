@@ -50,9 +50,9 @@ export function Dashboard() {
 
   return (
     <AppShell title="Argent de Poche" showVersion>
-      <div className="space-y-6">
+      <div className="space-y-5 sm:space-y-6">
         <section>
-          <div className="text-center mb-6">
+          <div className="text-center mb-5 sm:mb-6">
             <p className="text-sm text-gray-500 mb-1">Solde total</p>
             <p className="text-3xl font-bold text-gray-900">{formattedTotal}</p>
             <Link to="/stats" className="inline-block mt-2">
@@ -64,8 +64,8 @@ export function Dashboard() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Comptes</h2>
-          <div className="grid gap-4">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Comptes</h2>
+          <div className="grid gap-3 sm:gap-4">
             {loading ? (
               <>
                 <BalanceCardSkeleton name="Chargement..." />
