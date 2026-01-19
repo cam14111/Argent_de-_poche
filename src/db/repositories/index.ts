@@ -1,0 +1,6 @@
+export { profileRepository } from './profileRepository'
+export { transactionRepository } from './transactionRepository'
+export { motifRepository } from './motifRepository'
+export { userRepository } from './userRepository'
+export { settingsRepository } from './settingsRepository'
+export { syncOperationRepository } from './syncOperationRepository'
