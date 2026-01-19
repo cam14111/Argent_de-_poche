@@ -138,7 +138,7 @@ export class GoogleDriveService {
     ].join(' and ')
     const sharedUrl = `${DRIVE_BASE_URL}/files?q=${encodeURIComponent(
       sharedQuery
-    )}&fields=files(id,name,ownedByMe)&orderBy=modifiedTime desc`
+    )}&fields=files(id,name,ownedByMe)&supportsAllDrives=true&includeItemsFromAllDrives=true&orderBy=modifiedTime desc`
 
     console.log('[GoogleDrive] Searching for shared folders with query:', sharedQuery)
     const sharedResponse = await this.requestJson<{ files?: Array<{ id?: string; name?: string; ownedByMe?: boolean }> }>(
@@ -146,6 +146,17 @@ export class GoogleDriveService {
       { method: 'GET' }
     )
     console.log('[GoogleDrive] Shared folders found:', sharedResponse.files)
+
+    // Debug: chercher TOUS les dossiers partagés pour voir ce qui est disponible
+    const debugQuery = "mimeType='application/vnd.google-apps.folder' and sharedWithMe=true"
+    const debugUrl = `${DRIVE_BASE_URL}/files?q=${encodeURIComponent(
+      debugQuery
+    )}&fields=files(id,name,ownedByMe)&supportsAllDrives=true&includeItemsFromAllDrives=true`
+    const debugResponse = await this.requestJson<{ files?: Array<{ id?: string; name?: string; ownedByMe?: boolean }> }>(
+      debugUrl,
+      { method: 'GET' }
+    )
+    console.log('[GoogleDrive] DEBUG - All shared folders:', debugResponse.files)
 
     // Si un dossier partagé existe et n'est pas possédé par l'utilisateur, l'utiliser
     const sharedFolder = sharedResponse.files?.find(f => f.ownedByMe === false)
