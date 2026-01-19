@@ -31,12 +31,13 @@ export function TransactionForm({
   defaults,
 }: TransactionFormProps) {
   // Sprint 6: Support des valeurs par defaut pour la duplication
-  const initialAmount = defaults?.amount
-    ? (defaults.type === 'DEBIT' ? -defaults.amount : defaults.amount).toString()
-    : ''
+  const initialAmount = defaults?.amount ? defaults.amount.toString() : ''
 
   const [selectedProfileId, setSelectedProfileId] = useState<string>(
     defaults?.profileId?.toString() || defaultProfileId?.toString() || ''
+  )
+  const [transactionType, setTransactionType] = useState<'CREDIT' | 'DEBIT' | ''>(
+    defaults?.type || ''
   )
   const [amount, setAmount] = useState(initialAmount)
   const [selectedMotifId, setSelectedMotifId] = useState(defaults?.motifId?.toString() || '')
@@ -49,6 +50,7 @@ export function TransactionForm({
 
   const [errors, setErrors] = useState({
     profileId: '',
+    transactionType: '',
     amount: '',
     motifId: '',
     description: '',
@@ -59,8 +61,8 @@ export function TransactionForm({
   const allMotifs = useLiveQuery(() => motifRepository.getActive(), [])
 
   const amountValue = parseFloat(amount)
-  const isCredit = !isNaN(amountValue) && amountValue > 0
-  const isDebit = !isNaN(amountValue) && amountValue < 0
+  const isCredit = transactionType === 'CREDIT'
+  const isDebit = transactionType === 'DEBIT'
 
   const availableMotifs = allMotifs?.filter((motif) => {
     if (isCredit) {
@@ -85,6 +87,7 @@ export function TransactionForm({
   const validate = () => {
     const newErrors = {
       profileId: '',
+      transactionType: '',
       amount: '',
       motifId: '',
       description: '',
@@ -94,8 +97,12 @@ export function TransactionForm({
       newErrors.profileId = 'Veuillez sélectionner un profil'
     }
 
-    if (!amount || isNaN(amountValue) || amountValue === 0) {
-      newErrors.amount = 'Veuillez entrer un montant valide (différent de 0)'
+    if (!transactionType) {
+      newErrors.transactionType = 'Veuillez sélectionner le type de transaction'
+    }
+
+    if (!amount || isNaN(amountValue) || amountValue <= 0) {
+      newErrors.amount = 'Veuillez entrer un montant valide (supérieur à 0)'
     }
 
     if (!selectedMotifId) {
@@ -125,12 +132,10 @@ export function TransactionForm({
       }
       const currentUserId = parents[0].id!
 
-      const type = amountValue > 0 ? 'CREDIT' : 'DEBIT'
-
       await transactionRepository.create({
         profileId: parseInt(selectedProfileId),
-        amount: Math.abs(amountValue),
-        type,
+        amount: amountValue,
+        type: transactionType as 'CREDIT' | 'DEBIT',
         motifId: parseInt(selectedMotifId),
         description: description.trim() || undefined,
         createdBy: currentUserId,
@@ -183,16 +188,52 @@ export function TransactionForm({
           disabled={isSubmitting}
         />
 
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Type de transaction
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setTransactionType('CREDIT')}
+              disabled={isSubmitting}
+              className={`flex-1 py-3 px-4 rounded-lg border-2 font-medium transition-colors ${
+                transactionType === 'CREDIT'
+                  ? 'border-green-500 bg-green-50 text-green-700'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+              } disabled:opacity-50`}
+            >
+              + Revenu
+            </button>
+            <button
+              type="button"
+              onClick={() => setTransactionType('DEBIT')}
+              disabled={isSubmitting}
+              className={`flex-1 py-3 px-4 rounded-lg border-2 font-medium transition-colors ${
+                transactionType === 'DEBIT'
+                  ? 'border-red-500 bg-red-50 text-red-700'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+              } disabled:opacity-50`}
+            >
+              - Dépense
+            </button>
+          </div>
+          {errors.transactionType && (
+            <p className="text-sm text-red-600">{errors.transactionType}</p>
+          )}
+        </div>
+
         <Input
           label="Montant (€)"
           type="number"
+          inputMode="decimal"
           step="0.01"
+          min="0.01"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           error={errors.amount}
-          helperText="Entrez un montant positif pour un crédit, négatif pour un débit"
           disabled={isSubmitting}
-          placeholder="10.50 ou -5.00"
+          placeholder="10.50"
         />
 
         {(isCredit || isDebit) && (
