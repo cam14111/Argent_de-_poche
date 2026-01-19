@@ -16,6 +16,7 @@ interface MemberDataLoaderState {
 /**
  * Hook pour charger automatiquement les données en mode member
  * À utiliser dans les composants qui affichent des données (Dashboard, TransactionList)
+ * Force le rechargement à chaque montage du composant (navigation vers la page)
  */
 export function useMemberDataLoader(): MemberDataLoaderState {
   const { mode } = useSync()
@@ -32,10 +33,9 @@ export function useMemberDataLoader(): MemberDataLoaderState {
     setError(null)
 
     try {
-      const loaded = await memberDataLoader.loadIfMember()
-      if (loaded) {
-        setLastLoadAt(Date.now())
-      }
+      // Forcer le rechargement à chaque montage (comme le bouton Synchroniser)
+      await memberDataLoader.forceLoad()
+      setLastLoadAt(Date.now())
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erreur de chargement'
       setError(message)
