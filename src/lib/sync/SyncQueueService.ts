@@ -82,6 +82,15 @@ export class SyncQueueService {
 
       // Exécuter l'opération
       if (operation.type === 'BACKUP') {
+        // Vérifier le mode avant d'exécuter l'upload
+        if (syncService.getMode() !== 'owner') {
+          console.log('[SyncQueue] Skipping BACKUP operation - not owner mode')
+          await syncOperationRepository.update(operation.id!, {
+            status: 'COMPLETED',
+          })
+          await syncStatusManager.updatePendingCount()
+          return
+        }
         await syncService.upload()
       } else if (operation.type === 'RESTORE') {
         await syncService.sync()

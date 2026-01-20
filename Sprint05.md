@@ -157,3 +157,18 @@ Sync entre 2 parents opérationnelle
 - [ ] Tests passants (>70% couverture)
 - [ ] Code review effectuée
 - [ ] Documentation technique à jour
+
+---
+
+## Correctifs
+
+### v0.11.0 - Correction sync descendante mode enfant
+
+**Problème:** En mode enfant (`member`), une tentative d'upload était effectuée alors que la synchronisation devrait être uniquement descendante (téléchargement). Erreur: `"Insufficient permissions for the specified parent."`
+
+**Cause:** La protection dans `SyncService.upload()` ne bloquait que le mode `'member'`, mais le mode par défaut était `'none'`. Si l'upload était appelé avant la détection du mode ou via la queue, il passait.
+
+**Solution:**
+1. **SyncService.ts** : Inverser la logique - bloquer l'upload sauf si `mode === 'owner'`
+2. **AutoSyncService.ts** : Vérifier le mode avant d'ajouter des opérations BACKUP à la queue
+3. **SyncQueueService.ts** : Vérifier le mode avant d'exécuter l'upload, marquer comme COMPLETED si non-owner

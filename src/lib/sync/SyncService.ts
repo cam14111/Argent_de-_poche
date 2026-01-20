@@ -163,7 +163,7 @@ export class SyncService {
 
   /**
    * Upload des données locales vers Drive
-   * Bloqué en mode member (enfant)
+   * Autorisé uniquement en mode owner
    */
   async upload(payload?: BackupPayload): Promise<void> {
     const available = await this.isAvailable()
@@ -171,10 +171,10 @@ export class SyncService {
       throw new SyncError('Authentification Google requise pour uploader')
     }
 
-    // En mode member (enfant), bloquer l'upload
-    if (this.mode === 'member') {
-      console.log('[SyncService] Upload blocked in member mode')
-      throw new SyncError('Upload non autorisé en mode membre (enfant)')
+    // Bloquer l'upload sauf en mode owner
+    if (this.mode !== 'owner') {
+      console.log('[SyncService] Upload blocked - mode is not owner:', this.mode)
+      throw new SyncError('Upload non autorisé (mode: ' + this.mode + ')')
     }
 
     try {

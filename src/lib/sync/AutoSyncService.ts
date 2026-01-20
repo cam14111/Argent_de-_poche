@@ -84,6 +84,12 @@ export class AutoSyncService {
       const available = await syncService.isAvailable()
 
       if (!available) {
+        // Ne pas ajouter à la queue en mode non-owner
+        if (syncService.getMode() !== 'owner') {
+          console.log('[AutoSync] Sync not available, skipping queue - not owner mode')
+          this.isDirty = false
+          return
+        }
         console.log('[AutoSync] Sync not available, adding to queue')
         await syncQueueService.enqueue('BACKUP')
         this.isDirty = false
@@ -103,12 +109,17 @@ export class AutoSyncService {
       const message = error instanceof Error ? error.message : String(error)
       syncStatusManager.setSyncError(message)
 
-      // Ajouter à la queue en cas d'erreur
-      try {
-        await syncQueueService.enqueue('BACKUP')
+      // Ajouter à la queue en cas d'erreur (seulement en mode owner)
+      if (syncService.getMode() === 'owner') {
+        try {
+          await syncQueueService.enqueue('BACKUP')
+          this.isDirty = false
+        } catch (queueError) {
+          console.error('[AutoSync] Failed to enqueue:', queueError)
+        }
+      } else {
+        console.log('[AutoSync] Skipping error queue - not owner mode')
         this.isDirty = false
-      } catch (queueError) {
-        console.error('[AutoSync] Failed to enqueue:', queueError)
       }
     }
   }
