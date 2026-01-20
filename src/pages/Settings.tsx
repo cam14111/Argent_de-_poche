@@ -164,6 +164,18 @@ export function Settings() {
         setGoogleSession(session)
         if (session && !session.isExpired) {
           await loadDriveBackups(session)
+          // Charger les co-parents si en mode parent
+          if (isParentMode) {
+            try {
+              const detector = new SharedFolderDetector()
+              const ownerIds = await detector.getOwnerIds()
+              if (mounted) {
+                setCoParents(ownerIds)
+              }
+            } catch (error) {
+              console.error('[Settings] Error loading co-parents:', error)
+            }
+          }
         }
       }
     }
@@ -588,11 +600,12 @@ export function Settings() {
   }
 
   // Charger les co-parents quand Google est connecte
+  // Note: on utilise googleSession comme dépendance pour recharger à chaque visite de la page
   useEffect(() => {
     if (isGoogleConnected && isParentMode) {
       void loadCoParents()
     }
-  }, [isGoogleConnected, isParentMode])
+  }, [googleSession, isParentMode])
 
   const importModeLabel =
     importMode === 'replace'
