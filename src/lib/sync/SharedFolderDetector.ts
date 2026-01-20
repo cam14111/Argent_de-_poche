@@ -84,6 +84,7 @@ export class SharedFolderDetector {
     try {
       // Lister TOUS les fichiers dans le dossier ArgentDePoche (pas seulement les backups)
       const files = await this.drive.listAllFiles()
+      console.log('[SharedFolderDetector] All files in folder:', files.map(f => f.name))
 
       // Chercher SHARED_FOLDER_INFO.json
       const infoFile = files.find(
@@ -91,12 +92,14 @@ export class SharedFolderDetector {
       )
 
       if (!infoFile) {
+        console.log('[SharedFolderDetector] SHARED_FOLDER_INFO.json not found')
         return null
       }
 
       // Télécharger et parser le fichier
       const content = await this.drive.downloadFile(infoFile.id)
       const info = JSON.parse(content) as SharedFolderInfo
+      console.log('[SharedFolderDetector] Loaded folder info:', info)
 
       return info
     } catch (error) {

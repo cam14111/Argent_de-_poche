@@ -313,27 +313,19 @@ export class GoogleDriveService {
     fileId: string,
     request: { content: string; mimeType?: string }
   ): Promise<DriveFileEntry> {
-    const boundary = `adp-${Math.random().toString(16).slice(2)}`
     const mimeType = request.mimeType ?? 'application/json'
 
-    const body = [
-      `--${boundary}`,
-      `Content-Type: ${mimeType}`,
-      '',
-      request.content,
-      `--${boundary}--`,
-      '',
-    ].join('\r\n')
-
-    const uploadUrl = `${DRIVE_UPLOAD_URL}/files/${fileId}?uploadType=multipart&fields=id,name,size,createdTime,modifiedTime,appProperties`
+    // Utiliser uploadType=media pour une mise à jour simple du contenu
+    const uploadUrl = `${DRIVE_UPLOAD_URL}/files/${fileId}?uploadType=media&fields=id,name,size,createdTime,modifiedTime,appProperties`
     const response = await this.requestJson<Record<string, any>>(uploadUrl, {
       method: 'PATCH',
       headers: {
-        'Content-Type': `multipart/related; boundary=${boundary}`,
+        'Content-Type': mimeType,
       },
-      body,
+      body: request.content,
     })
 
+    console.log('[GoogleDrive] Updated file:', fileId, response)
     return parseFileEntry(response)
   }
 }
