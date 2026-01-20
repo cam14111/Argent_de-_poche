@@ -35,7 +35,7 @@ export class SharedFolderDetector {
     try {
       // Vérifier si l'utilisateur est connecté
       const session = await this.auth.getSession()
-      if (!session || !session.profile) {
+      if (!session || !session.profile || !session.profile.email) {
         return 'none'
       }
 
@@ -49,8 +49,8 @@ export class SharedFolderDetector {
         return 'owner'
       }
 
-      // Comparer l'email de l'utilisateur avec l'owner
-      if (info.ownerId === userEmail) {
+      // Vérifier si l'utilisateur est dans la liste des owners (parents)
+      if (this.isOwner(info, userEmail)) {
         return 'owner'
       } else {
         return 'member'
@@ -59,6 +59,22 @@ export class SharedFolderDetector {
       console.error('[SharedFolderDetector] Error detecting mode:', error)
       return 'none'
     }
+  }
+
+  /**
+   * Vérifie si un email est dans la liste des owners
+   * Gère la rétrocompatibilité avec l'ancien format (ownerId seul)
+   */
+  private isOwner(info: SharedFolderInfo, email: string): boolean {
+    // Nouveau format: vérifier dans ownerIds
+    if (info.ownerIds && info.ownerIds.length > 0) {
+      return info.ownerIds.includes(email)
+    }
+    // Ancien format: vérifier ownerId (rétrocompatibilité)
+    if (info.ownerId) {
+      return info.ownerId === email
+    }
+    return false
   }
 
   /**
@@ -95,7 +111,7 @@ export class SharedFolderDetector {
   async createSharedFolderInfo(ownerEmail: string): Promise<void> {
     try {
       const info: SharedFolderInfo = {
-        ownerId: ownerEmail,
+        ownerIds: [ownerEmail],
         createdAt: new Date().toISOString(),
         appVersion: '1.0.0', // TODO: Récupérer depuis package.json
         sharedMode: true,
@@ -142,6 +158,9 @@ export class SharedFolderDetector {
         if (session && session.profile && session.profile.email) {
           await this.createSharedFolderInfo(session.profile.email)
         }
+      } else {
+        // Migrer vers le nouveau format si nécessaire
+        await this.migrateToOwnerIds()
       }
     }
 
@@ -157,10 +176,200 @@ export class SharedFolderDetector {
   }
 
   /**
-   * Récupère l'email du propriétaire
+   * Récupère l'email du propriétaire principal (premier owner)
+   * @deprecated Utiliser getOwnerIds() pour obtenir tous les owners
    */
   async getOwnerId(): Promise<string | null> {
     const info = await this.getSharedFolderInfo()
-    return info?.ownerId ?? null
+    if (!info) return null
+    // Nouveau format
+    if (info.ownerIds && info.ownerIds.length > 0) {
+      return info.ownerIds[0]
+    }
+    // Ancien format (rétrocompatibilité)
+    return info.ownerId ?? null
+  }
+
+  /**
+   * Récupère la liste des emails des owners (parents)
+   */
+  async getOwnerIds(): Promise<string[]> {
+    const info = await this.getSharedFolderInfo()
+    if (!info) return []
+    // Nouveau format
+    if (info.ownerIds && info.ownerIds.length > 0) {
+      return info.ownerIds
+    }
+    // Ancien format (rétrocompatibilité)
+    if (info.ownerId) {
+      return [info.ownerId]
+    }
+    return []
+  }
+
+  /**
+   * Ajoute un co-parent (owner) au dossier partagé
+   * Seul un owner existant peut ajouter un autre owner
+   */
+  async addOwner(newOwnerEmail: string): Promise<void> {
+    const session = await this.auth.getSession()
+    if (!session || !session.profile || !session.profile.email) {
+      throw new SharedFolderError('Non connecté')
+    }
+
+    const currentUserEmail = session.profile.email
+    const info = await this.getSharedFolderInfo()
+
+    if (!info) {
+      throw new SharedFolderError('Aucun dossier partagé trouvé')
+    }
+
+    // Vérifier que l'utilisateur actuel est un owner
+    if (!this.isOwner(info, currentUserEmail)) {
+      throw new SharedFolderError('Seul un parent peut ajouter un autre parent')
+    }
+
+    // Normaliser l'email
+    const normalizedEmail = newOwnerEmail.toLowerCase().trim()
+
+    // Construire la nouvelle liste des owners
+    let ownerIds: string[] = []
+    if (info.ownerIds && info.ownerIds.length > 0) {
+      ownerIds = [...info.ownerIds]
+    } else if (info.ownerId) {
+      // Migration depuis l'ancien format
+      ownerIds = [info.ownerId]
+    }
+
+    // Vérifier que l'email n'est pas déjà dans la liste
+    if (ownerIds.includes(normalizedEmail)) {
+      console.log('[SharedFolderDetector] Owner already exists:', normalizedEmail)
+      return
+    }
+
+    // Ajouter le nouvel owner
+    ownerIds.push(normalizedEmail)
+
+    // Mettre à jour le fichier
+    const updatedInfo: SharedFolderInfo = {
+      ownerIds,
+      createdAt: info.createdAt,
+      appVersion: info.appVersion,
+      sharedMode: true,
+    }
+
+    await this.updateSharedFolderInfo(updatedInfo)
+    console.log('[SharedFolderDetector] Added new owner:', normalizedEmail)
+  }
+
+  /**
+   * Retire un co-parent (owner) du dossier partagé
+   * Le premier owner (créateur) ne peut pas être retiré
+   */
+  async removeOwner(ownerEmailToRemove: string): Promise<void> {
+    const session = await this.auth.getSession()
+    if (!session || !session.profile || !session.profile.email) {
+      throw new SharedFolderError('Non connecté')
+    }
+
+    const currentUserEmail = session.profile.email
+    const info = await this.getSharedFolderInfo()
+
+    if (!info) {
+      throw new SharedFolderError('Aucun dossier partagé trouvé')
+    }
+
+    // Vérifier que l'utilisateur actuel est un owner
+    if (!this.isOwner(info, currentUserEmail)) {
+      throw new SharedFolderError('Seul un parent peut retirer un autre parent')
+    }
+
+    // Construire la liste des owners
+    let ownerIds: string[] = info.ownerIds && info.ownerIds.length > 0
+      ? [...info.ownerIds]
+      : info.ownerId ? [info.ownerId] : []
+
+    // Ne pas permettre de retirer le premier owner (créateur)
+    if (ownerIds.length > 0 && ownerIds[0].toLowerCase() === ownerEmailToRemove.toLowerCase()) {
+      throw new SharedFolderError('Impossible de retirer le créateur du dossier')
+    }
+
+    // Retirer l'owner
+    const normalizedEmail = ownerEmailToRemove.toLowerCase().trim()
+    ownerIds = ownerIds.filter(e => e.toLowerCase() !== normalizedEmail)
+
+    // Mettre à jour le fichier
+    const updatedInfo: SharedFolderInfo = {
+      ownerIds,
+      createdAt: info.createdAt,
+      appVersion: info.appVersion,
+      sharedMode: true,
+    }
+
+    await this.updateSharedFolderInfo(updatedInfo)
+    console.log('[SharedFolderDetector] Removed owner:', normalizedEmail)
+  }
+
+  /**
+   * Met à jour le fichier SHARED_FOLDER_INFO.json
+   */
+  private async updateSharedFolderInfo(info: SharedFolderInfo): Promise<void> {
+    try {
+      // Trouver le fichier existant pour obtenir son ID
+      const files = await this.drive.listAllFiles()
+      const existingFile = files.find(f => f.name === SHARED_FOLDER_INFO_FILENAME)
+
+      if (existingFile) {
+        // Mettre à jour le fichier existant
+        await this.drive.updateFile(existingFile.id, {
+          content: JSON.stringify(info, null, 2),
+        })
+      } else {
+        // Créer un nouveau fichier
+        await this.drive.uploadFile({
+          name: SHARED_FOLDER_INFO_FILENAME,
+          content: JSON.stringify(info, null, 2),
+          mimeType: 'application/json',
+          appProperties: {
+            type: 'shared-folder-info',
+          },
+        })
+      }
+
+      console.log('[SharedFolderDetector] Updated SHARED_FOLDER_INFO.json', info)
+    } catch (error) {
+      console.error('[SharedFolderDetector] Error updating folder info:', error)
+      throw new SharedFolderError('Impossible de mettre à jour le fichier de partage')
+    }
+  }
+
+  /**
+   * Migre l'ancien format (ownerId) vers le nouveau format (ownerIds)
+   * Appelée automatiquement lors de l'initialisation si nécessaire
+   */
+  async migrateToOwnerIds(): Promise<boolean> {
+    const info = await this.getSharedFolderInfo()
+    if (!info) return false
+
+    // Déjà au nouveau format
+    if (info.ownerIds && info.ownerIds.length > 0) {
+      return false
+    }
+
+    // Migration nécessaire
+    if (info.ownerId) {
+      const updatedInfo: SharedFolderInfo = {
+        ownerIds: [info.ownerId],
+        createdAt: info.createdAt,
+        appVersion: info.appVersion,
+        sharedMode: info.sharedMode,
+      }
+
+      await this.updateSharedFolderInfo(updatedInfo)
+      console.log('[SharedFolderDetector] Migrated ownerId to ownerIds')
+      return true
+    }
+
+    return false
   }
 }

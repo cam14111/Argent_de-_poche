@@ -27,7 +27,10 @@ export interface SyncMetadata {
  * Informations du dossier partagé (fichier SHARED_FOLDER_INFO.json sur Drive)
  */
 export interface SharedFolderInfo {
-  ownerId: string
+  /** @deprecated Utiliser ownerIds à la place. Gardé pour rétrocompatibilité. */
+  ownerId?: string
+  /** Liste des emails des parents autorisés à synchroniser en lecture/écriture */
+  ownerIds: string[]
   createdAt: string
   appVersion: string
   sharedMode: boolean

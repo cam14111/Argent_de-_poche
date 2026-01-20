@@ -305,4 +305,35 @@ export class GoogleDriveService {
       throw buildDriveError(response.status, payload, 'Erreur Google Drive.')
     }
   }
+
+  /**
+   * Met à jour le contenu d'un fichier existant
+   */
+  async updateFile(
+    fileId: string,
+    request: { content: string; mimeType?: string }
+  ): Promise<DriveFileEntry> {
+    const boundary = `adp-${Math.random().toString(16).slice(2)}`
+    const mimeType = request.mimeType ?? 'application/json'
+
+    const body = [
+      `--${boundary}`,
+      `Content-Type: ${mimeType}`,
+      '',
+      request.content,
+      `--${boundary}--`,
+      '',
+    ].join('\r\n')
+
+    const uploadUrl = `${DRIVE_UPLOAD_URL}/files/${fileId}?uploadType=multipart&fields=id,name,size,createdTime,modifiedTime,appProperties`
+    const response = await this.requestJson<Record<string, any>>(uploadUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    })
+
+    return parseFileEntry(response)
+  }
 }

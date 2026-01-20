@@ -27,6 +27,7 @@ import {
 import { backupManager, type DriveBackupItem } from '@/lib/backupManager'
 import { GoogleAuthError, GoogleAuthService, type GoogleAuthSession } from '@/lib/googleAuth'
 import { GoogleDriveError } from '@/lib/googleDrive'
+import { SharedFolderDetector, SharedFolderError } from '@/lib/sync'
 
 type StatusMessage = { type: 'success' | 'error'; message: string }
 
@@ -66,6 +67,14 @@ export function Settings() {
   const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
   const [deletingBackupId, setDeletingBackupId] = useState<string | null>(null)
+
+  // Co-parents management
+  const [coParents, setCoParents] = useState<string[]>([])
+  const [newCoParentEmail, setNewCoParentEmail] = useState('')
+  const [coParentStatus, setCoParentStatus] = useState<StatusMessage | null>(null)
+  const [isLoadingCoParents, setIsLoadingCoParents] = useState(false)
+  const [isAddingCoParent, setIsAddingCoParent] = useState(false)
+  const [removingCoParentEmail, setRemovingCoParentEmail] = useState<string | null>(null)
 
   const formattedExportedAt = useMemo(() => {
     if (!summary?.exportedAt) return ''
@@ -508,6 +517,83 @@ export function Settings() {
     }
   }
 
+  const loadCoParents = async () => {
+    if (!isGoogleConnected) return
+    setIsLoadingCoParents(true)
+    try {
+      const detector = new SharedFolderDetector()
+      const ownerIds = await detector.getOwnerIds()
+      setCoParents(ownerIds)
+    } catch (error) {
+      console.error('[Settings] Error loading co-parents:', error)
+    } finally {
+      setIsLoadingCoParents(false)
+    }
+  }
+
+  const handleAddCoParent = async () => {
+    const email = newCoParentEmail.trim().toLowerCase()
+    if (!email) {
+      setCoParentStatus({ type: 'error', message: 'Veuillez entrer une adresse email.' })
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setCoParentStatus({ type: 'error', message: 'Adresse email invalide.' })
+      return
+    }
+    if (coParents.includes(email)) {
+      setCoParentStatus({ type: 'error', message: 'Ce parent est deja dans la liste.' })
+      return
+    }
+
+    setIsAddingCoParent(true)
+    setCoParentStatus(null)
+    try {
+      const detector = new SharedFolderDetector()
+      await detector.addOwner(email)
+      setCoParents((prev) => [...prev, email])
+      setNewCoParentEmail('')
+      setCoParentStatus({ type: 'success', message: 'Co-parent ajoute avec succes.' })
+    } catch (error) {
+      const message = error instanceof SharedFolderError
+        ? error.message
+        : 'Erreur lors de l\'ajout du co-parent.'
+      setCoParentStatus({ type: 'error', message })
+    } finally {
+      setIsAddingCoParent(false)
+    }
+  }
+
+  const handleRemoveCoParent = async (email: string) => {
+    const confirmed = window.confirm(
+      `Retirer "${email}" de la liste des parents ? Ce parent ne pourra plus synchroniser en ecriture.`
+    )
+    if (!confirmed) return
+
+    setRemovingCoParentEmail(email)
+    setCoParentStatus(null)
+    try {
+      const detector = new SharedFolderDetector()
+      await detector.removeOwner(email)
+      setCoParents((prev) => prev.filter((e) => e !== email))
+      setCoParentStatus({ type: 'success', message: 'Co-parent retire.' })
+    } catch (error) {
+      const message = error instanceof SharedFolderError
+        ? error.message
+        : 'Erreur lors du retrait du co-parent.'
+      setCoParentStatus({ type: 'error', message })
+    } finally {
+      setRemovingCoParentEmail(null)
+    }
+  }
+
+  // Charger les co-parents quand Google est connecte
+  useEffect(() => {
+    if (isGoogleConnected && isParentMode) {
+      void loadCoParents()
+    }
+  }, [isGoogleConnected, isParentMode])
+
   const importModeLabel =
     importMode === 'replace'
       ? 'Remplacer toutes les donnees'
@@ -592,6 +678,96 @@ export function Settings() {
             )}
           </CardContent>
         </Card>
+
+        {isParentMode && isGoogleConnected && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Co-parents</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Ajoutez d'autres parents pour qu'ils puissent synchroniser et modifier les donnees.
+                Les enfants restent en lecture seule.
+              </p>
+
+              {isLoadingCoParents ? (
+                <p className="text-sm text-gray-500">Chargement...</p>
+              ) : coParents.length === 0 ? (
+                <p className="text-sm text-gray-500">Aucun parent configure.</p>
+              ) : (
+                <ul className="divide-y divide-gray-200">
+                  {coParents.map((email, index) => (
+                    <li
+                      key={email}
+                      className="flex items-center justify-between py-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-800">{email}</span>
+                        {index === 0 && (
+                          <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
+                            Createur
+                          </span>
+                        )}
+                        {email === googleEmail && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                            Vous
+                          </span>
+                        )}
+                      </div>
+                      {index > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveCoParent(email)}
+                          loading={removingCoParentEmail === email}
+                          disabled={removingCoParentEmail !== null}
+                        >
+                          Retirer
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end border-t pt-4">
+                <Input
+                  label="Ajouter un co-parent"
+                  type="email"
+                  placeholder="email@exemple.com"
+                  value={newCoParentEmail}
+                  onChange={(e) => setNewCoParentEmail(e.target.value)}
+                  disabled={isAddingCoParent}
+                />
+                <Button
+                  variant="primary"
+                  onClick={handleAddCoParent}
+                  loading={isAddingCoParent}
+                  disabled={!newCoParentEmail.trim()}
+                >
+                  Ajouter
+                </Button>
+              </div>
+
+              {coParentStatus && (
+                <div
+                  className={`rounded-lg px-3 py-2 text-sm ${
+                    coParentStatus.type === 'success'
+                      ? 'bg-green-50 text-green-700'
+                      : 'bg-red-50 text-red-700'
+                  }`}
+                >
+                  {coParentStatus.message}
+                </div>
+              )}
+
+              <div className="rounded-lg bg-blue-50 text-blue-700 px-3 py-2 text-sm">
+                <strong>Note :</strong> Les co-parents doivent avoir acces au dossier Google Drive
+                "ArgentDePoche" (partage via Google Drive).
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {!isParentMode && (
           <Card>
