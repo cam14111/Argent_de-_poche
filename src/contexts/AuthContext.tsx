@@ -8,8 +8,16 @@ import {
 } from 'react'
 import { settingsRepository } from '@/db'
 import { hashPin, verifyPin } from '@/lib/crypto'
+import { SharedFolderDetector } from '@/lib/sync/SharedFolderDetector'
+import { GoogleAuthService } from '@/lib/googleAuth'
 
 type AuthMode = 'PARENT' | 'ENFANT'
+
+export type ParentAuthResult = {
+  authorized: boolean
+  reason: 'first_user' | 'owner' | 'not_owner' | 'not_connected' | 'offline_cached' | 'error'
+  message?: string
+}
 
 interface AuthContextValue {
   mode: AuthMode
@@ -21,12 +29,14 @@ interface AuthContextValue {
   setPin: (pin: string) => Promise<void>
   changePin: (oldPin: string, newPin: string) => Promise<boolean>
   resetPin: () => Promise<void>
+  checkParentAuthorization: () => Promise<ParentAuthResult>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 const PIN_HASH_KEY = 'pin_hash'
 const MODE_KEY = 'auth_mode'
+const VERIFIED_PARENT_EMAIL_KEY = 'verified_parent_email'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<AuthMode>('ENFANT')
@@ -88,6 +98,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [setPin]
   )
 
+  const checkParentAuthorization = useCallback(async (): Promise<ParentAuthResult> => {
+    try {
+      // Vérifier si connecté à Google
+      const session = await GoogleAuthService.getSession()
+      const isConnected = !!(session && session.profile && session.profile.email)
+      const currentEmail = session?.profile?.email?.toLowerCase()
+
+      if (!isConnected) {
+        // Vérifier le cache pour le mode offline
+        const cachedEmail = await settingsRepository.get(VERIFIED_PARENT_EMAIL_KEY)
+        if (cachedEmail) {
+          return {
+            authorized: true,
+            reason: 'offline_cached',
+            message: 'Accès autorisé (vérifié précédemment)'
+          }
+        }
+        return {
+          authorized: false,
+          reason: 'not_connected',
+          message: 'Connexion à Google requise pour la première configuration du mode parent'
+        }
+      }
+
+      // Utiliser SharedFolderDetector pour vérifier l'éligibilité
+      const detector = new SharedFolderDetector()
+      const eligibility = await detector.checkParentEligibility()
+
+      switch (eligibility) {
+        case 'owner':
+          // Mettre en cache l'email vérifié pour le mode offline
+          if (currentEmail) {
+            await settingsRepository.set(VERIFIED_PARENT_EMAIL_KEY, currentEmail)
+          }
+          return {
+            authorized: true,
+            reason: 'owner',
+            message: 'Vous êtes enregistré comme parent'
+          }
+
+        case 'first_user':
+          // Premier utilisateur, sera owner après création du PIN
+          if (currentEmail) {
+            await settingsRepository.set(VERIFIED_PARENT_EMAIL_KEY, currentEmail)
+          }
+          return {
+            authorized: true,
+            reason: 'first_user',
+            message: 'Première configuration - vous deviendrez le parent principal'
+          }
+
+        case 'member':
+          return {
+            authorized: false,
+            reason: 'not_owner',
+            message: 'Vous n\'êtes pas enregistré comme parent. Contactez un parent pour être ajouté à la liste.'
+          }
+
+        case 'not_connected':
+        default:
+          return {
+            authorized: false,
+            reason: 'not_connected',
+            message: 'Connexion à Google requise'
+          }
+      }
+    } catch (error) {
+      console.error('[AuthContext] Error checking parent authorization:', error)
+      return {
+        authorized: false,
+        reason: 'error',
+        message: 'Erreur lors de la vérification. Veuillez réessayer.'
+      }
+    }
+  }, [])
+
   return (
     <AuthContext.Provider
       value={{
@@ -100,6 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPin,
         changePin,
         resetPin,
+        checkParentAuthorization,
       }}
     >
       {children}

@@ -6,7 +6,7 @@
  * Version de l'application
  * À mettre à jour manuellement à chaque modification
  */
-export const APP_VERSION = '0.9.5'
+export const APP_VERSION = '0.10.0'
 
 /**
  * Nom de l'application

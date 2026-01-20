@@ -158,6 +158,28 @@ V1 complète
 
 ---
 
+### US-6.10 : Sécurisation de l'accès au mode parent ✅
+**Priorité:** Must | **Effort:** M
+
+**En tant que** parent,
+**Je veux** que l'accès au mode parent soit protégé par vérification d'identité,
+**Afin d'** empêcher un enfant de créer un PIN et usurper les droits parent sur un nouvel appareil.
+
+**Critères d'acceptation:**
+- [x] Vérification des `ownerIds` dans `SHARED_FOLDER_INFO.json` avant création du PIN
+- [x] Premier utilisateur autorisé automatiquement (devient owner)
+- [x] Dialog de connexion Google si non connecté
+- [x] Dialog d'accès refusé pour les non-parents avec message explicatif
+- [x] Cache local `verified_parent_email` pour le mode offline (parents déjà vérifiés)
+- [x] Vérification de l'autorisation avant reset du PIN
+
+**Implémentation (v0.10.0):**
+- `SharedFolderDetector.checkParentEligibility()` : Vérifie l'éligibilité sans effets de bord
+- `AuthContext.checkParentAuthorization()` : Retourne `ParentAuthResult` avec raison détaillée
+- `AppShell.tsx` : Nouveau flux avec dialogs de vérification, connexion requise, accès refusé
+
+---
+
 ## Critères de sortie V1 (fin Sprint 6)
 
 - [ ] Tous critères MVP

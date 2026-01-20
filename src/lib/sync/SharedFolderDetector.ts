@@ -347,6 +347,42 @@ export class SharedFolderDetector {
   }
 
   /**
+   * Vérifie l'éligibilité d'un utilisateur à être parent
+   * Méthode helper sans effets de bord pour la vérification d'autorisation
+   * @returns 'owner' si dans ownerIds, 'first_user' si pas de SHARED_FOLDER_INFO, 'member' sinon, 'not_connected' si pas connecté
+   */
+  async checkParentEligibility(): Promise<'owner' | 'first_user' | 'member' | 'not_connected'> {
+    try {
+      // Vérifier si l'utilisateur est connecté
+      const session = await this.auth.getSession()
+      if (!session || !session.profile || !session.profile.email) {
+        return 'not_connected'
+      }
+
+      const userEmail = session.profile.email
+
+      // Chercher le fichier SHARED_FOLDER_INFO.json
+      const info = await this.getSharedFolderInfo()
+
+      if (!info) {
+        // Pas de fichier info trouvé, l'utilisateur sera le premier (owner)
+        return 'first_user'
+      }
+
+      // Vérifier si l'utilisateur est dans la liste des owners (parents)
+      if (this.isOwner(info, userEmail)) {
+        return 'owner'
+      }
+
+      return 'member'
+    } catch (error) {
+      console.error('[SharedFolderDetector] Error checking parent eligibility:', error)
+      // En cas d'erreur réseau, retourner not_connected pour forcer une nouvelle tentative
+      return 'not_connected'
+    }
+  }
+
+  /**
    * Migre l'ancien format (ownerId) vers le nouveau format (ownerIds)
    * Appelée automatiquement lors de l'initialisation si nécessaire
    */
