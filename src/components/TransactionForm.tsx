@@ -229,15 +229,13 @@ export function TransactionForm({
 
         <Input
           label="Montant (€)"
-          type="number"
+          type="text"
           inputMode="decimal"
-          step="0.01"
-          min="0.01"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           error={errors.amount}
           disabled={isSubmitting}
-          placeholder="10.50"
+          placeholder="10,50"
         />
 
         {(isCredit || isDebit) && (

@@ -1,5 +1,6 @@
 import { type Transaction, type Motif } from '@/db/database'
 import { Card } from './ui'
+import { formatSignedEuros } from '@/lib/money'
 
 interface TransactionListItemProps {
   transaction: Transaction
@@ -22,7 +23,6 @@ export function TransactionListItem({
 
   const amountColor =
     transaction.type === 'CREDIT' ? 'text-green-600' : 'text-red-600'
-  const amountSign = transaction.type === 'CREDIT' ? '+' : '-'
 
   const displayMotif =
     transaction.hiddenForUsers && isChildMode
@@ -70,8 +70,7 @@ export function TransactionListItem({
         </div>
         <div className="flex-shrink-0">
           <p className={`text-lg font-bold ${amountColor}`}>
-            {amountSign}
-            {transaction.amount.toFixed(2)} €
+            {formatSignedEuros(transaction.amount, transaction.type)}
           </p>
         </div>
       </div>

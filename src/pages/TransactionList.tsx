@@ -11,6 +11,7 @@ import { Button, Card, CardContent } from '@/components/ui'
 import { profileRepository, transactionRepository, motifRepository } from '@/db'
 import { useAuth } from '@/contexts/AuthContext'
 import { useMemberDataLoader } from '@/hooks/useMemberDataLoader'
+import { formatEuros } from '@/lib/money'
 
 export function TransactionList() {
   const { profileId } = useParams({ strict: false })
@@ -103,7 +104,7 @@ export function TransactionList() {
                   (balance ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'
                 }`}
               >
-                {(balance ?? 0).toFixed(2)} €
+                {formatEuros(balance ?? 0)}
               </p>
             </div>
             {isParentMode && (

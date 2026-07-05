@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Dialog, Button, Input } from './ui'
 import { type Transaction } from '@/db/database'
 import { transactionRepository, userRepository } from '@/db'
+import { parseAmount, MAX_AMOUNT, formatSignedEuros } from '@/lib/money'
 
 interface CorrectionDialogProps {
   open: boolean
@@ -28,12 +29,22 @@ export function CorrectionDialog({
       setError('')
       setIsSubmitting(true)
 
+      let adjustAmount: number | undefined
       if (correctionType === 'ADJUST') {
-        const parsedAmount = parseFloat(newAmount)
-        if (isNaN(parsedAmount) || parsedAmount === transaction.amount) {
+        const parsed = parseAmount(newAmount)
+        if (parsed === null || parsed <= 0) {
+          setError('Veuillez entrer un montant valide (supérieur à 0)')
+          return
+        }
+        if (parsed > MAX_AMOUNT) {
+          setError(`Le montant ne peut pas dépasser ${MAX_AMOUNT} €`)
+          return
+        }
+        if (parsed === transaction.amount) {
           setError('Le nouveau montant doit être différent du montant actuel')
           return
         }
+        adjustAmount = parsed
       }
 
       const parents = await userRepository.getParents()
@@ -46,7 +57,7 @@ export function CorrectionDialog({
         transaction.id!,
         correctionType,
         userId,
-        correctionType === 'ADJUST' ? parseFloat(newAmount) : undefined
+        adjustAmount
       )
 
       onSuccess()
@@ -67,8 +78,7 @@ export function CorrectionDialog({
         <div>
           <p className="text-sm text-gray-600 mb-1">Montant actuel</p>
           <p className="text-lg font-bold">
-            {transaction.type === 'CREDIT' ? '+' : '-'}
-            {transaction.amount.toFixed(2)} €
+            {formatSignedEuros(transaction.amount, transaction.type)}
           </p>
         </div>
 
@@ -108,8 +118,8 @@ export function CorrectionDialog({
               </p>
               {correctionType === 'ADJUST' && (
                 <Input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={newAmount}
                   onChange={(e) => setNewAmount(e.target.value)}
                   placeholder={transaction.amount.toFixed(2)}
