@@ -1,4 +1,4 @@
-const CACHE_NAME = 'argent-de-poche-v2'
+const CACHE_NAME = 'argent-de-poche-v3'
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -36,30 +36,49 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+// Stratégies :
+// - Navigations (index.html) : réseau d'abord, cache en secours.
+//   Garantit que chaque déploiement est récupéré dès que l'appareil est en ligne,
+//   tout en gardant le mode hors-ligne fonctionnel.
+// - Autres ressources (assets hashés, icônes) : cache d'abord, réseau en secours.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
   const url = new URL(event.request.url)
   if (url.origin !== self.location.origin) return
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached
-
-      return fetch(event.request)
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
         .then((response) => {
-          if (response && response.status === 200 && response.type === 'basic') {
+          if (response && response.status === 200) {
             const responseClone = response.clone()
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone))
           }
           return response
         })
-        .catch(() => {
-          if (event.request.mode === 'navigate') {
-            const indexUrl = new URL('./index.html', self.registration.scope).href
-            return caches.match(indexUrl)
-          }
-          return Promise.reject(new Error('Network error'))
+        .catch(async () => {
+          const cached = await caches.match(event.request)
+          if (cached) return cached
+          const indexUrl = new URL('./index.html', self.registration.scope).href
+          const index = await caches.match(indexUrl)
+          if (index) return index
+          return Response.error()
         })
+    )
+    return
+  }
+
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached
+
+      return fetch(event.request).then((response) => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const responseClone = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone))
+        }
+        return response
+      })
     })
   )
 })

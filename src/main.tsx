@@ -39,8 +39,12 @@ if (import.meta.env.DEV) {
   })
 } else if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((error) => {
-      console.error('Echec enregistrement service worker:', error)
-    })
+    // BASE_URL est indispensable : l'app est servie sous /Argent_de-_poche/
+    // sur GitHub Pages, /sw.js n'existe pas à la racine du domaine.
+    navigator.serviceWorker
+      .register(`${import.meta.env.BASE_URL}sw.js`)
+      .catch((error) => {
+        console.error('Echec enregistrement service worker:', error)
+      })
   })
 }

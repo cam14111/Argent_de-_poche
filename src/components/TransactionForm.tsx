@@ -7,6 +7,7 @@ import {
   transactionRepository,
   userRepository,
 } from '@/db'
+import { parseAmount, MAX_AMOUNT } from '@/lib/money'
 
 export interface TransactionFormDefaults {
   profileId?: number
@@ -60,7 +61,8 @@ export function TransactionForm({
   const profiles = useLiveQuery(() => profileRepository.getActive(), [])
   const allMotifs = useLiveQuery(() => motifRepository.getActive(), [])
 
-  const amountValue = parseFloat(amount)
+  const parsedAmount = parseAmount(amount)
+  const amountValue = parsedAmount ?? NaN
   const isCredit = transactionType === 'CREDIT'
   const isDebit = transactionType === 'DEBIT'
 
@@ -101,8 +103,10 @@ export function TransactionForm({
       newErrors.transactionType = 'Veuillez sélectionner le type de transaction'
     }
 
-    if (!amount || isNaN(amountValue) || amountValue <= 0) {
+    if (parsedAmount === null || parsedAmount <= 0) {
       newErrors.amount = 'Veuillez entrer un montant valide (supérieur à 0)'
+    } else if (parsedAmount > MAX_AMOUNT) {
+      newErrors.amount = `Le montant ne peut pas dépasser ${MAX_AMOUNT} €`
     }
 
     if (!selectedMotifId) {
