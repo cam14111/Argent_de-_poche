@@ -80,7 +80,11 @@ export function computeDueDates(config: AllowanceConfig, now: Date): Date[] {
   const due: Date[] = []
 
   if (config.frequency === 'weekly') {
-    const targetDay = config.dayOfWeek ?? 6 // samedi par défaut
+    // Normaliser le jour cible dans [0, 6]. Une valeur invalide (NaN, 7, -1)
+    // issue d'un JSON corrompu ou d'un futur writer ferait tourner la boucle
+    // do/while à l'infini car Date.getDay() ne renvoie jamais > 6.
+    const rawDay = config.dayOfWeek ?? 6 // samedi par défaut
+    const targetDay = Number.isInteger(rawDay) ? ((rawDay % 7) + 7) % 7 : 6
     // Première occurrence STRICTEMENT après lastApplied
     const cursor = new Date(lastApplied)
     cursor.setHours(12, 0, 0, 0)
@@ -125,10 +129,30 @@ export async function getPendingPayments(now = new Date()): Promise<PendingPayme
   return pending.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
 }
 
+/** Marqueur de description des versements automatiques (sert à la dédup). */
+export const ALLOWANCE_DESCRIPTION = 'Argent de poche automatique'
+
+/** Clé de déduplication : un versement par profil et par jour d'échéance. */
+function paymentKey(profileId: number, date: Date): string {
+  return `${profileId}|${date.toISOString().slice(0, 10)}`
+}
+
 /**
- * Applique tous les versements en attente : crée les transactions CREDIT
- * (motif « Argent de poche ») et avance `lastAppliedAt` pour chaque profil.
- * Retourne le nombre de versements créés.
+ * Applique les versements en attente : crée les transactions CREDIT (motif
+ * « Argent de poche ») et avance `lastAppliedAt` par profil.
+ *
+ * Robustesse :
+ * - idempotent : un versement déjà présent (même profil + même jour +
+ *   marqueur) n'est pas recréé, ce qui protège des ré-exécutions après un
+ *   échec partiel et des ré-applications sur le même appareil ;
+ * - progression persistée après CHAQUE création : si une création échoue en
+ *   cours de route, les versements déjà faits ne seront pas recréés.
+ *
+ * Limite connue : deux co-parents appliquant hors-ligne avant synchronisation
+ * peuvent encore produire un doublon (les ids de transactions sont propres à
+ * chaque appareil et l'union de merge les conserve tous les deux).
+ *
+ * Retourne le nombre de versements réellement créés.
  */
 export async function applyPendingPayments(now = new Date()): Promise<number> {
   const pending = await getPendingPayments(now)
@@ -148,32 +172,45 @@ export async function applyPendingPayments(now = new Date()): Promise<number> {
     throw new Error('Aucun parent trouvé')
   }
 
-  const lastByProfile = new Map<number, Date>()
-  for (const payment of pending) {
-    await transactionRepository.create({
-      profileId: payment.profileId,
-      amount: payment.amount,
-      type: 'CREDIT',
-      motifId: allowanceMotif.id,
-      description: 'Argent de poche automatique',
-      createdBy,
-      createdAt: payment.dueDate,
-      hiddenForUsers: false,
-    })
-    const current = lastByProfile.get(payment.profileId)
-    if (!current || payment.dueDate > current) {
-      lastByProfile.set(payment.profileId, payment.dueDate)
-    }
-  }
+  // Index des versements automatiques déjà enregistrés (dédup locale).
+  const existing = await transactionRepository.getAll(true)
+  const existingKeys = new Set(
+    existing
+      .filter((t) => t.description === ALLOWANCE_DESCRIPTION)
+      .map((t) => paymentKey(t.profileId, new Date(t.createdAt)))
+  )
 
   const configs = await getAllowanceConfigs()
-  for (const [profileId, lastDate] of lastByProfile) {
-    const config = configs[String(profileId)]
+  let created = 0
+
+  // `pending` est trié par date croissante, donc lastAppliedAt avance de façon
+  // monotone. On persiste après chaque création réussie.
+  for (const payment of pending) {
+    const key = paymentKey(payment.profileId, payment.dueDate)
+    if (!existingKeys.has(key)) {
+      await transactionRepository.create({
+        profileId: payment.profileId,
+        amount: payment.amount,
+        type: 'CREDIT',
+        motifId: allowanceMotif.id,
+        description: ALLOWANCE_DESCRIPTION,
+        createdBy,
+        createdAt: payment.dueDate,
+        hiddenForUsers: false,
+      })
+      existingKeys.add(key)
+      created += 1
+    }
+
+    const config = configs[String(payment.profileId)]
     if (config) {
-      config.lastAppliedAt = lastDate.toISOString()
+      const prev = new Date(config.lastAppliedAt).getTime()
+      if (Number.isNaN(prev) || payment.dueDate.getTime() > prev) {
+        config.lastAppliedAt = payment.dueDate.toISOString()
+        await settingsRepository.set(ALLOWANCE_CONFIG_KEY, JSON.stringify(configs))
+      }
     }
   }
-  await settingsRepository.set(ALLOWANCE_CONFIG_KEY, JSON.stringify(configs))
 
-  return pending.length
+  return created
 }

@@ -97,6 +97,8 @@ export const transactionRepository = {
   ): Promise<number> {
     const original = await this.getById(originalId)
     if (!original) throw new Error('Transaction originale introuvable')
+    if (original.deletedAt)
+      throw new Error('Transaction supprimée : correction impossible')
     if (original.linkedTransactionId)
       throw new Error('Transaction déjà corrigée')
 

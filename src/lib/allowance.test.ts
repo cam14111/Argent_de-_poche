@@ -64,4 +64,19 @@ describe('computeDueDates', () => {
     const config = weekly('not-a-date', 6)
     expect(computeDueDates(config, new Date())).toEqual([])
   })
+
+  it('does not infinite-loop on an out-of-range dayOfWeek', () => {
+    // dayOfWeek = 7 (invalid) must be normalised, not spin forever.
+    const config = weekly('2026-01-01T12:00:00.000Z', 7)
+    const due = computeDueDates(config, new Date('2026-01-20T12:00:00.000Z'))
+    // 7 % 7 === 0 (dimanche) : on obtient bien des dimanches, sans blocage.
+    expect(due.every((d) => d.getDay() === 0)).toBe(true)
+  })
+
+  it('normalises a negative dayOfWeek', () => {
+    const config = weekly('2026-01-01T12:00:00.000Z', -1)
+    const due = computeDueDates(config, new Date('2026-01-20T12:00:00.000Z'))
+    // -1 -> samedi (6)
+    expect(due.every((d) => d.getDay() === 6)).toBe(true)
+  })
 })

@@ -142,9 +142,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedHash = await settingsRepository.get(PIN_HASH_KEY)
       if (!storedHash) return false
 
-      const isValid = await verifyPin(oldPin, storedHash)
-      if (!isValid) return false
+      // Même protection anti-force brute que switchToParentMode.
+      const lockoutUntilRaw = await settingsRepository.get(PIN_LOCKOUT_UNTIL_KEY)
+      const lockoutUntil = lockoutUntilRaw ? Number.parseInt(lockoutUntilRaw, 10) : 0
+      if (lockoutUntil > Date.now()) return false
 
+      const isValid = await verifyPin(oldPin, storedHash)
+      if (!isValid) {
+        const attemptsRaw = await settingsRepository.get(PIN_FAILED_ATTEMPTS_KEY)
+        const attempts = (attemptsRaw ? Number.parseInt(attemptsRaw, 10) : 0) + 1
+        if (attempts >= MAX_PIN_ATTEMPTS) {
+          await settingsRepository.set(
+            PIN_LOCKOUT_UNTIL_KEY,
+            String(Date.now() + LOCKOUT_DURATION_MS)
+          )
+          await settingsRepository.delete(PIN_FAILED_ATTEMPTS_KEY)
+        } else {
+          await settingsRepository.set(PIN_FAILED_ATTEMPTS_KEY, String(attempts))
+        }
+        return false
+      }
+
+      await settingsRepository.delete(PIN_FAILED_ATTEMPTS_KEY)
+      await settingsRepository.delete(PIN_LOCKOUT_UNTIL_KEY)
       await setPin(newPin)
       return true
     },
