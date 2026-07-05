@@ -17,6 +17,12 @@ export const EXCLUDED_SETTINGS_KEYS = new Set([
   'google_drive_folder_id',
   'google_profile',
   'google_drive_last_backup',
+  // État de sécurité et d'auth propre à l'appareil : ne doit jamais être
+  // synchronisé ni écrasé par une restauration (sinon un verrouillage ou un
+  // compteur d'essais d'un appareil affecterait les autres appareils).
+  'verified_parent_email',
+  'pin_failed_attempts',
+  'pin_lockout_until',
 ])
 
 /**

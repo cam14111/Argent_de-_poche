@@ -1044,6 +1044,12 @@ export function Settings() {
                 <Link to="/settings/motifs">
                   <Button variant="secondary">Gerer les motifs</Button>
                 </Link>
+                <Link to="/settings/allowance">
+                  <Button variant="secondary">Argent de poche auto</Button>
+                </Link>
+                <Link to="/settings/goals">
+                  <Button variant="secondary">Objectifs d'épargne</Button>
+                </Link>
                 <Link to="/help">
                   <Button variant="ghost">Aide</Button>
                 </Link>

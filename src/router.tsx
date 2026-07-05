@@ -33,6 +33,14 @@ const ProfilesManagement = lazy(() =>
 const Stats = lazy(() =>
   import('./pages/Stats').then((m) => ({ default: m.Stats }))
 )
+const AllowanceManagement = lazy(() =>
+  import('./pages/AllowanceManagement').then((m) => ({
+    default: m.AllowanceManagement,
+  }))
+)
+const GoalsManagement = lazy(() =>
+  import('./pages/GoalsManagement').then((m) => ({ default: m.GoalsManagement }))
+)
 const Help = lazy(() =>
   import('./pages/Help').then((m) => ({ default: m.Help }))
 )
@@ -109,6 +117,18 @@ const statsRoute = createRoute({
   component: withSuspense(Stats),
 })
 
+const allowanceManagementRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/allowance',
+  component: withSuspense(AllowanceManagement),
+})
+
+const goalsManagementRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/goals',
+  component: withSuspense(GoalsManagement),
+})
+
 const helpRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/help',
@@ -135,6 +155,8 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
   motifsManagementRoute,
   profilesManagementRoute,
+  allowanceManagementRoute,
+  goalsManagementRoute,
   statsRoute,
   helpRoute,
   googleAuthDebugRoute,

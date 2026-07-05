@@ -71,11 +71,11 @@ export function AppShell({ title, children, showModeSwitch = true, backTo, showV
     setLoading(true)
     setPinError('')
     try {
-      const success = await switchToParentMode(pin)
-      if (success) {
+      const result = await switchToParentMode(pin)
+      if (result.success) {
         setShowPinDialog(false)
       } else {
-        setPinError('Code PIN incorrect')
+        setPinError(result.message ?? 'Code PIN incorrect')
       }
     } finally {
       setLoading(false)

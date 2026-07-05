@@ -44,7 +44,7 @@ describe('GoogleDriveService', () => {
           files: [
             {
               id: 'file-1',
-              name: 'backup.json',
+              name: 'argent-de-poche-backup-2025-01-01.json',
               size: '512',
               createdTime: '2025-01-01T10:00:00.000Z',
               appProperties: {

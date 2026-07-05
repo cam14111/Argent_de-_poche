@@ -1,5 +1,6 @@
 import { db, type Transaction } from '../database'
 import { autoSyncService } from '@/lib/sync'
+import { roundCents } from '@/lib/money'
 
 export const transactionRepository = {
   async getAll(includeDeleted = false): Promise<Transaction[]> {
@@ -24,11 +25,12 @@ export const transactionRepository = {
   },
 
   async create(
-    transaction: Omit<Transaction, 'id' | 'createdAt'>
+    transaction: Omit<Transaction, 'id' | 'createdAt'> & { createdAt?: Date }
   ): Promise<number> {
     const id = await db.transactions.add({
       ...transaction,
-      createdAt: new Date(),
+      amount: roundCents(transaction.amount),
+      createdAt: transaction.createdAt ?? new Date(),
     })
     autoSyncService.markDirty()
     return id as number
@@ -95,6 +97,8 @@ export const transactionRepository = {
   ): Promise<number> {
     const original = await this.getById(originalId)
     if (!original) throw new Error('Transaction originale introuvable')
+    if (original.deletedAt)
+      throw new Error('Transaction supprimée : correction impossible')
     if (original.linkedTransactionId)
       throw new Error('Transaction déjà corrigée')
 
@@ -106,8 +110,11 @@ export const transactionRepository = {
       correctionAmount = original.amount
       type = original.type === 'DEBIT' ? 'CREDIT' : 'DEBIT'
     } else {
-      // Pour un ajustement
-      const difference = newAmount! - original.amount
+      if (typeof newAmount !== 'number' || Number.isNaN(newAmount)) {
+        throw new Error('Montant de correction invalide')
+      }
+      // Pour un ajustement (arrondi au centime pour rester exact)
+      const difference = roundCents(newAmount - original.amount)
 
       if (original.type === 'DEBIT') {
         // Si la transaction originale est un débit

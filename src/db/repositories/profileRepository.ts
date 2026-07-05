@@ -1,5 +1,6 @@
 import { db, type Profile } from '../database'
 import { autoSyncService } from '@/lib/sync'
+import { sumAmounts } from '@/lib/money'
 
 export const profileRepository = {
   async getAll(): Promise<Profile[]> {
@@ -44,9 +45,10 @@ export const profileRepository = {
 
     const activeTransactions = transactions.filter((tx) => !tx.deletedAt)
 
-    return activeTransactions.reduce((acc, tx) => {
-      return tx.type === 'CREDIT' ? acc + tx.amount : acc - tx.amount
-    }, 0)
+    // Somme en centimes pour éviter les erreurs de virgule flottante
+    return sumAmounts(
+      activeTransactions.map((tx) => (tx.type === 'CREDIT' ? tx.amount : -tx.amount))
+    )
   },
 
   // Sprint 6: Nouvelles méthodes pour l'archivage

@@ -11,6 +11,7 @@ import {
   profileRepository,
 } from '@/db'
 import { useAuth } from '@/contexts/AuthContext'
+import { formatSignedEuros } from '@/lib/money'
 
 export function TransactionDetail() {
   const { id } = useParams({ strict: false })
@@ -75,7 +76,6 @@ export function TransactionDetail() {
 
   const amountColor =
     transaction.type === 'CREDIT' ? 'text-green-600' : 'text-red-600'
-  const amountSign = transaction.type === 'CREDIT' ? '+' : '-'
 
   const canCorrect = isParentMode && !transaction.linkedTransactionId
 
@@ -133,8 +133,7 @@ export function TransactionDetail() {
             <div>
               <p className="text-sm text-gray-600">Montant</p>
               <p className={`text-3xl font-bold ${amountColor}`}>
-                {amountSign}
-                {transaction.amount.toFixed(2)} €
+                {formatSignedEuros(transaction.amount, transaction.type)}
               </p>
             </div>
 

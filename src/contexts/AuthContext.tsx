@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 import { settingsRepository } from '@/db'
-import { hashPin, verifyPin } from '@/lib/crypto'
+import { hashPin, verifyPin, needsRehash } from '@/lib/crypto'
 import { SharedFolderDetector } from '@/lib/sync/SharedFolderDetector'
 import { GoogleAuthService } from '@/lib/googleAuth'
 
@@ -19,12 +19,18 @@ export type ParentAuthResult = {
   message?: string
 }
 
+export type PinAttemptResult = {
+  success: boolean
+  /** Message d'erreur à afficher (PIN incorrect, verrouillage temporaire…) */
+  message?: string
+}
+
 interface AuthContextValue {
   mode: AuthMode
   isParentMode: boolean
   isChildMode: boolean
   isPinSet: boolean
-  switchToParentMode: (pin: string) => Promise<boolean>
+  switchToParentMode: (pin: string) => Promise<PinAttemptResult>
   switchToChildMode: () => void
   setPin: (pin: string) => Promise<void>
   changePin: (oldPin: string, newPin: string) => Promise<boolean>
@@ -37,6 +43,11 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 const PIN_HASH_KEY = 'pin_hash'
 const MODE_KEY = 'auth_mode'
 const VERIFIED_PARENT_EMAIL_KEY = 'verified_parent_email'
+const PIN_FAILED_ATTEMPTS_KEY = 'pin_failed_attempts'
+const PIN_LOCKOUT_UNTIL_KEY = 'pin_lockout_until'
+
+const MAX_PIN_ATTEMPTS = 5
+const LOCKOUT_DURATION_MS = 60_000
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<AuthMode>('ENFANT')
@@ -55,17 +66,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth()
   }, [])
 
-  const switchToParentMode = useCallback(async (pin: string): Promise<boolean> => {
-    const storedHash = await settingsRepository.get(PIN_HASH_KEY)
-    if (!storedHash) return false
+  const switchToParentMode = useCallback(
+    async (pin: string): Promise<PinAttemptResult> => {
+      const storedHash = await settingsRepository.get(PIN_HASH_KEY)
+      if (!storedHash) {
+        return { success: false, message: 'Aucun code PIN configuré.' }
+      }
 
-    const isValid = await verifyPin(pin, storedHash)
-    if (isValid) {
-      setMode('PARENT')
-      await settingsRepository.set(MODE_KEY, 'PARENT')
-    }
-    return isValid
-  }, [])
+      // Verrouillage temporaire après plusieurs échecs
+      const lockoutUntilRaw = await settingsRepository.get(PIN_LOCKOUT_UNTIL_KEY)
+      const lockoutUntil = lockoutUntilRaw ? Number.parseInt(lockoutUntilRaw, 10) : 0
+      if (lockoutUntil > Date.now()) {
+        const seconds = Math.ceil((lockoutUntil - Date.now()) / 1000)
+        return {
+          success: false,
+          message: `Trop de tentatives. Réessayez dans ${seconds} s.`,
+        }
+      }
+
+      const isValid = await verifyPin(pin, storedHash)
+      if (isValid) {
+        await settingsRepository.delete(PIN_FAILED_ATTEMPTS_KEY)
+        await settingsRepository.delete(PIN_LOCKOUT_UNTIL_KEY)
+        // Migration transparente des anciens hashes SHA-256 vers PBKDF2
+        if (needsRehash(storedHash)) {
+          await settingsRepository.set(PIN_HASH_KEY, await hashPin(pin))
+        }
+        setMode('PARENT')
+        await settingsRepository.set(MODE_KEY, 'PARENT')
+        return { success: true }
+      }
+
+      const attemptsRaw = await settingsRepository.get(PIN_FAILED_ATTEMPTS_KEY)
+      const attempts = (attemptsRaw ? Number.parseInt(attemptsRaw, 10) : 0) + 1
+      if (attempts >= MAX_PIN_ATTEMPTS) {
+        await settingsRepository.set(
+          PIN_LOCKOUT_UNTIL_KEY,
+          String(Date.now() + LOCKOUT_DURATION_MS)
+        )
+        await settingsRepository.delete(PIN_FAILED_ATTEMPTS_KEY)
+        return {
+          success: false,
+          message: 'Trop de tentatives. Réessayez dans 1 minute.',
+        }
+      }
+      await settingsRepository.set(PIN_FAILED_ATTEMPTS_KEY, String(attempts))
+      const remaining = MAX_PIN_ATTEMPTS - attempts
+      return {
+        success: false,
+        message: `Code PIN incorrect (${remaining} essai${remaining > 1 ? 's' : ''} restant${remaining > 1 ? 's' : ''}).`,
+      }
+    },
+    []
+  )
 
   const switchToChildMode = useCallback(async () => {
     setMode('ENFANT')
@@ -89,9 +142,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedHash = await settingsRepository.get(PIN_HASH_KEY)
       if (!storedHash) return false
 
-      const isValid = await verifyPin(oldPin, storedHash)
-      if (!isValid) return false
+      // Même protection anti-force brute que switchToParentMode.
+      const lockoutUntilRaw = await settingsRepository.get(PIN_LOCKOUT_UNTIL_KEY)
+      const lockoutUntil = lockoutUntilRaw ? Number.parseInt(lockoutUntilRaw, 10) : 0
+      if (lockoutUntil > Date.now()) return false
 
+      const isValid = await verifyPin(oldPin, storedHash)
+      if (!isValid) {
+        const attemptsRaw = await settingsRepository.get(PIN_FAILED_ATTEMPTS_KEY)
+        const attempts = (attemptsRaw ? Number.parseInt(attemptsRaw, 10) : 0) + 1
+        if (attempts >= MAX_PIN_ATTEMPTS) {
+          await settingsRepository.set(
+            PIN_LOCKOUT_UNTIL_KEY,
+            String(Date.now() + LOCKOUT_DURATION_MS)
+          )
+          await settingsRepository.delete(PIN_FAILED_ATTEMPTS_KEY)
+        } else {
+          await settingsRepository.set(PIN_FAILED_ATTEMPTS_KEY, String(attempts))
+        }
+        return false
+      }
+
+      await settingsRepository.delete(PIN_FAILED_ATTEMPTS_KEY)
+      await settingsRepository.delete(PIN_LOCKOUT_UNTIL_KEY)
       await setPin(newPin)
       return true
     },
